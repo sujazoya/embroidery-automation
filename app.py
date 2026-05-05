@@ -1,15 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyembroidery import read
-import tempfile, os, requests, uuid
-import json
+import tempfile, os, requests, uuid, json
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔥 HARDCODED (you asked for it)
-SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN")
-SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID")
+# ✅ USE ENV (or fallback to hardcoded)
+SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN") or "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
+SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID") or "LZTJ86J91SXMN"
+
 
 # 🎯 Hoop size classification
 def classify_area(w, h):
@@ -27,15 +27,21 @@ def classify_area(w, h):
         return "12x20"
     return "Oversized"
 
+
 # 📦 Bounding box
 def bbox(pattern):
     xs = [p[0] for p in pattern.stitches]
     ys = [p[1] for p in pattern.stitches]
     return min(xs), min(ys), max(xs), max(ys)
 
+
 @app.route("/create", methods=["POST"])
 def create():
     try:
+        print("==== REQUEST RECEIVED ====")
+        print("FILES:", request.files)
+        print("FORM:", request.form)
+
         # ✅ Validate input
         if "file" not in request.files or "image" not in request.files:
             return jsonify({"success": False, "error": "Missing file or image"}), 400
@@ -46,6 +52,9 @@ def create():
 
         if not category:
             return jsonify({"success": False, "error": "Category required"}), 400
+
+        if not SQUARE_ACCESS_TOKEN:
+            return jsonify({"success": False, "error": "Square token missing"}), 500
 
         design_name = file.filename.rsplit(".", 1)[0]
 
@@ -70,24 +79,30 @@ def create():
         # 💰 Auto price
         price = int(stitches * 0.05)
 
-        # 🖼 Upload image to Square
+        # =========================
+        # 🖼 UPLOAD IMAGE TO SQUARE
+        # =========================
         img_res = requests.post(
-    "https://connect.squareup.com/v2/catalog/images",
-    headers={
-        "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
-    },
-    files={
-        "file": (image.filename, image.stream, image.mimetype),
-        "request": (
-            None,
-            json.dumps({
-                "idempotency_key": str(uuid.uuid4()),
-                "object_id": "#TEMP_ID"
-            }),
-            "application/json"
+            "https://connect.squareup.com/v2/catalog/images",
+            headers={
+                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+            },
+            files={
+                "file": (image.filename, image.stream, image.mimetype)
+            },
+            data={
+                "request": json.dumps({
+                    "idempotency_key": str(uuid.uuid4())
+                })
+            }
         )
-    }
-)
+
+        # 🔍 DEBUG LOGS
+        print("==== SQUARE IMAGE DEBUG ====")
+        print("TOKEN:", SQUARE_ACCESS_TOKEN[:10], "...")  # partial for safety
+        print("STATUS:", img_res.status_code)
+        print("RESPONSE:", img_res.text)
+        print("============================")
 
         img_json = img_res.json()
 
@@ -100,7 +115,9 @@ def create():
 
         img_id = img_json["image"]["id"]
 
+        # =========================
         # 📝 CLEAN DESCRIPTION
+        # =========================
         description = (
             f"Design Name: {design_name}\n"
             f"Width: {width} mm\n"
@@ -110,7 +127,9 @@ def create():
             f"Format: DST"
         )
 
-        # 🛒 Create product
+        # =========================
+        # 🛒 CREATE PRODUCT
+        # =========================
         body = {
             "idempotency_key": str(uuid.uuid4()),
             "object": {
@@ -145,6 +164,11 @@ def create():
                 "Content-Type": "application/json"
             }
         )
+
+        print("==== SQUARE PRODUCT DEBUG ====")
+        print("STATUS:", res.status_code)
+        print("RESPONSE:", res.text)
+        print("==============================")
 
         square_res = res.json()
 
