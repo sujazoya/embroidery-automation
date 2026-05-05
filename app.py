@@ -7,8 +7,8 @@ app = Flask(__name__)
 CORS(app)
 
 # 🔥 HARDCODED (you asked for it)
-SQUARE_ACCESS_TOKEN = "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
-SQUARE_LOCATION_ID = "LZTJ86J91SXMN"
+SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN")
+SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID")
 
 # 🎯 Hoop size classification
 def classify_area(w, h):
