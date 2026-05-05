@@ -6,9 +6,9 @@ import tempfile, os, requests, uuid
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Correct ENV usage
-SQUARE_ACCESS_TOKEN = os.environ.get("EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA")
-SQUARE_LOCATION_ID = os.environ.get("LZTJ86J91SXMN")
+# 🔥 HARDCODED (you asked for it)
+SQUARE_ACCESS_TOKEN = "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
+SQUARE_LOCATION_ID = "LZTJ86J91SXMN"
 
 # 🎯 Hoop size classification
 def classify_area(w, h):
@@ -46,9 +46,6 @@ def create():
         if not category:
             return jsonify({"success": False, "error": "Category required"}), 400
 
-        if not SQUARE_ACCESS_TOKEN:
-            return jsonify({"success": False, "error": "Square token missing"}), 500
-
         design_name = file.filename.rsplit(".", 1)[0]
 
         # 📂 Save DST temporarily
@@ -64,7 +61,7 @@ def create():
         height = round(abs(b - t) / 10, 2)
         stitches = len(pattern.stitches)
 
-        os.unlink(path)  # ✅ fixed
+        os.unlink(path)
 
         # 🎯 Hoop size
         area = classify_area(width, height)
@@ -99,7 +96,7 @@ def create():
 
         img_id = img_json["image"]["id"]
 
-        # 📝 CLEAN STRUCTURED DESCRIPTION (LIKE YOU WANTED)
+        # 📝 CLEAN DESCRIPTION
         description = (
             f"Design Name: {design_name}\n"
             f"Width: {width} mm\n"
@@ -109,7 +106,7 @@ def create():
             f"Format: DST"
         )
 
-        # 🛒 Create product in Square
+        # 🛒 Create product
         body = {
             "idempotency_key": str(uuid.uuid4()),
             "object": {
@@ -153,7 +150,6 @@ def create():
                 "error": square_res["errors"]
             }), 500
 
-        # ✅ Success response (for UI)
         return jsonify({
             "success": True,
             "message": "Product created successfully",
