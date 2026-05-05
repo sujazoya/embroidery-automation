@@ -1,0 +1,100 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from pyembroidery import read
+import tempfile, os, requests, uuid
+
+app = Flask(__name__)
+CORS(app)
+
+SQUARE_ACCESS_TOKEN = "PUT_YOUR_TOKEN"
+SQUARE_LOCATION_ID = "PUT_LOCATION_ID"
+
+def classify_area(w, h):
+    if w <= 100 and h <= 100: return "4x4"
+    if w <= 130 and h <= 180: return "5x7"
+    if w <= 160 and h <= 260: return "6x10"
+    return "Large"
+
+def bbox(pattern):
+    xs = [p[0] for p in pattern.stitches]
+    ys = [p[1] for p in pattern.stitches]
+    return min(xs), min(ys), max(xs), max(ys)
+
+@app.route("/create", methods=["POST"])
+def create():
+    file = request.files["file"]
+    image = request.files["image"]
+    category = request.form["category"]
+
+    # save dst
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as f:
+        file.save(f.name)
+        path = f.name
+
+    pattern = read(path)
+    l,t,r,b = bbox(pattern)
+
+    w = abs(r-l)/10
+    h = abs(b-t)/10
+    stitches = len(pattern.stitches)
+
+    os.unlink(path)
+
+    # 🔥 AUTO PRICE
+    price = int(stitches * 0.05)
+
+    # 🔥 Upload image
+    img_res = requests.post(
+        "https://connect.squareup.com/v2/catalog/images",
+        headers={"Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"},
+        files={"file": (image.filename, image.stream, image.mimetype)}
+    )
+
+    img_id = img_res.json().get("image", {}).get("id")
+
+    # 🔥 Create product
+    body = {
+        "idempotency_key": str(uuid.uuid4()),
+        "object": {
+            "type": "ITEM",
+            "id": "#item",
+            "item_data": {
+                "name": file.filename.split(".")[0],
+                "description": f"""
+Width: {w:.2f}mm
+Height: {h:.2f}mm
+Stitches: {stitches}
+Auto Price: ${price/100}
+                """,
+                "category_id": category,
+                "image_ids": [img_id],
+                "variations": [{
+                    "type": "ITEM_VARIATION",
+                    "id": "#var",
+                    "item_variation_data": {
+                        "name": "Default",
+                        "pricing_type": "FIXED_PRICING",
+                        "price_money": {
+                            "amount": price,
+                            "currency": "USD"
+                        }
+                    }
+                }]
+            }
+        }
+    }
+
+    res = requests.post(
+        "https://connect.squareup.com/v2/catalog/object",
+        json=body,
+        headers={
+            "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+    )
+
+    return jsonify(res.json())
+
+@app.route("/")
+def home():
+    return {"status": "ok"}
