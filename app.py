@@ -6,8 +6,8 @@ import tempfile, os, requests, uuid
 app = Flask(__name__)
 CORS(app)
 
-SQUARE_ACCESS_TOKEN = "PUT_YOUR_TOKEN"
-SQUARE_LOCATION_ID = "PUT_LOCATION_ID"
+SQUARE_ACCESS_TOKEN = "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA
+SQUARE_LOCATION_ID = "LZTJ86J91SXMN"
 
 def classify_area(w, h):
     if w <= 100 and h <= 100: return "4x4"
