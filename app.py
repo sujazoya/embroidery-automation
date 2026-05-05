@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pyembroidery import read
 import tempfile, os, requests, uuid
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -71,19 +72,22 @@ def create():
 
         # 🖼 Upload image to Square
         img_res = requests.post(
-            "https://connect.squareup.com/v2/catalog/images",
-            headers={
-                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
-            },
-            files={
-                "file": (image.filename, image.stream, image.mimetype),
-                "request": (
-                    None,
-                    '{"idempotency_key": "' + str(uuid.uuid4()) + '"}',
-                    "application/json"
-                )
-            }
+    "https://connect.squareup.com/v2/catalog/images",
+    headers={
+        "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+    },
+    files={
+        "file": (image.filename, image.stream, image.mimetype),
+        "request": (
+            None,
+            json.dumps({
+                "idempotency_key": str(uuid.uuid4()),
+                "object_id": "#TEMP_ID"
+            }),
+            "application/json"
         )
+    }
+)
 
         img_json = img_res.json()
 
