@@ -7,8 +7,8 @@ app = Flask(__name__)
 CORS(app)
 
 # ⚠️ TEMP (we will secure later)
-SQUARE_ACCESS_TOKEN = "PUT_YOUR_TOKEN_HERE"
-SQUARE_LOCATION_ID = "PUT_LOCATION_ID"
+SQUARE_ACCESS_TOKEN = "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
+SQUARE_LOCATION_ID = "LZTJ86J91SXMN"
 
 def bbox(pattern):
     xs = [p[0] for p in pattern.stitches]
