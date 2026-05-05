@@ -6,10 +6,27 @@ import tempfile, os, requests, uuid
 app = Flask(__name__)
 CORS(app)
 
-# ⚠️ TEMP (we will secure later)
-SQUARE_ACCESS_TOKEN = "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
-SQUARE_LOCATION_ID = "LZTJ86J91SXMN"
+# ⚠️ Move these to ENV later
+SQUARE_ACCESS_TOKEN = os.environ.get(EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA)
+SQUARE_LOCATION_ID = os.environ.get(LZTJ86J91SXMN)
 
+# 🎯 Hoop size classification
+def classify_area(w, h):
+    if w <= 100 and h <= 100:
+        return "4x4"
+    elif w <= 130 and h <= 180:
+        return "5x7"
+    elif w <= 160 and h <= 260:
+        return "6x10"
+    elif w <= 200 and h <= 300:
+        return "8x12"
+    elif w <= 260 and h <= 400:
+        return "10x16"
+    elif w <= 300 and h <= 500:
+        return "12x20"
+    return "Oversized"
+
+# 📦 Bounding box
 def bbox(pattern):
     xs = [p[0] for p in pattern.stitches]
     ys = [p[1] for p in pattern.stitches]
@@ -18,11 +35,19 @@ def bbox(pattern):
 @app.route("/create", methods=["POST"])
 def create():
     try:
+        if "file" not in request.files or "image" not in request.files:
+            return jsonify({"success": False, "error": "Missing file/image"}), 400
+
         file = request.files["file"]
         image = request.files["image"]
-        category = request.form["category"]
+        category = request.form.get("category")
 
-        # save dst
+        if not category:
+            return jsonify({"success": False, "error": "Category required"}), 400
+
+        design_name = file.filename.rsplit(".", 1)[0]
+
+        # 📂 Save DST temp
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as f:
             file.save(f.name)
             path = f.name
@@ -30,24 +55,31 @@ def create():
         pattern = read(path)
         l, t, r, b = bbox(pattern)
 
-        w = abs(r - l) / 10
-        h = abs(b - t) / 10
+        width = round(abs(r - l) / 10, 2)
+        height = round(abs(b - t) / 10, 2)
         stitches = len(pattern.stitches)
 
         os.unlink(path)
 
-        # 🔥 AUTO PRICE
+        # 🎯 Hoop size
+        area = classify_area(width, height)
+
+        # 💰 Auto price (simple logic)
         price = int(stitches * 0.05)
 
-        # 🔥 Upload image
+        # 🖼 Upload image to Square
         img_res = requests.post(
             "https://connect.squareup.com/v2/catalog/images",
             headers={
-                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+                "Authorization": f"Bearer {EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA}"
             },
             files={
                 "file": (image.filename, image.stream, image.mimetype),
-                "request": (None, '{"idempotency_key": "' + str(uuid.uuid4()) + '"}', "application/json")
+                "request": (
+                    None,
+                    '{"idempotency_key": "' + str(uuid.uuid4()) + '"}',
+                    "application/json"
+                )
             }
         )
 
@@ -62,20 +94,24 @@ def create():
 
         img_id = img_json["image"]["id"]
 
-        # 🔥 Create product
+        # 📝 CLEAN DESCRIPTION (THIS IS WHAT YOU WANTED)
+        description = f"""Design Name: {design_name}
+Width: {width} mm
+Height: {height} mm
+Stitches: {stitches}
+Hoop Size: {area}
+Format: DST
+"""
+
+        # 🛒 Create product
         body = {
             "idempotency_key": str(uuid.uuid4()),
             "object": {
                 "type": "ITEM",
                 "id": "#item",
                 "item_data": {
-                    "name": file.filename.split(".")[0],
-                    "description": f"""
-Width: {w:.2f}mm
-Height: {h:.2f}mm
-Stitches: {stitches}
-Auto Price: ${price/100}
-                    """,
+                    "name": design_name,
+                    "description": description,
                     "category_id": category,
                     "image_ids": [img_id],
                     "variations": [{
@@ -98,7 +134,7 @@ Auto Price: ${price/100}
             "https://connect.squareup.com/v2/catalog/object",
             json=body,
             headers={
-                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}",
+                "Authorization": f"Bearer {EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA}",
                 "Content-Type": "application/json"
             }
         )
@@ -113,7 +149,15 @@ Auto Price: ${price/100}
 
         return jsonify({
             "success": True,
-            "product": square_res
+            "message": "Product created successfully",
+            "data": {
+                "name": design_name,
+                "width": width,
+                "height": height,
+                "stitches": stitches,
+                "area": area,
+                "price": price
+            }
         })
 
     except Exception as e:
@@ -125,7 +169,10 @@ Auto Price: ${price/100}
 
 @app.route("/")
 def home():
-    return {"status": "ok"}
+    return {
+        "status": "running",
+        "message": "Embroidery Auto Product API 🚀"
+    }
 
 
 if __name__ == "__main__":
