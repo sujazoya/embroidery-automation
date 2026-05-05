@@ -82,38 +82,60 @@ def create():
         # =========================
         # 🖼 UPLOAD IMAGE TO SQUARE
         # =========================
-        img_res = requests.post(
-            "https://connect.squareup.com/v2/catalog/images",
-            headers={
-                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
-            },
-            files={
-                "file": (image.filename, image.stream, image.mimetype)
-            },
-            data={
-                "request": json.dumps({
-                    "idempotency_key": str(uuid.uuid4())
-                })
-            }
-        )
+        print("==== START IMAGE UPLOAD ====")
 
-        # 🔍 DEBUG LOGS
-        print("==== SQUARE IMAGE DEBUG ====")
-        print("TOKEN:", SQUARE_ACCESS_TOKEN[:10], "...")  # partial for safety
-        print("STATUS:", img_res.status_code)
-        print("RESPONSE:", img_res.text)
-        print("============================")
+if not image:
+    print("❌ NO IMAGE RECEIVED")
+else:
+    print("✅ IMAGE RECEIVED:", image.filename, image.mimetype)
 
+try:
+    img_res = requests.post(
+        "https://connect.squareup.com/v2/catalog/images",
+        headers={
+            "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+        },
+        files={
+            "file": (image.filename, image.stream, image.mimetype)
+        },
+        data={
+            "request": json.dumps({
+                "idempotency_key": str(uuid.uuid4())
+            })
+        }
+    )
+
+    print("STATUS:", img_res.status_code)
+    print("RAW RESPONSE:", img_res.text)
+
+    # Try parsing JSON safely
+    try:
         img_json = img_res.json()
+    except:
+        return jsonify({
+            "success": False,
+            "error": "Invalid JSON from Square",
+            "raw": img_res.text
+        }), 500
 
-        if "image" not in img_json:
-            return jsonify({
-                "success": False,
-                "error": "Image upload failed",
-                "details": img_json
-            }), 500
+    if "image" not in img_json:
+        return jsonify({
+            "success": False,
+            "error": "Image upload failed",
+            "details": img_json
+        }), 500
 
-        img_id = img_json["image"]["id"]
+    img_id = img_json["image"]["id"]
+
+except Exception as e:
+    print("❌ EXCEPTION DURING IMAGE UPLOAD:", str(e))
+    return jsonify({
+        "success": False,
+        "error": "Crash during image upload",
+        "details": str(e)
+    }), 500
+
+print("==== END IMAGE UPLOAD ====")
 
         # =========================
         # 📝 CLEAN DESCRIPTION
