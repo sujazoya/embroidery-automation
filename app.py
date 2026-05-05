@@ -38,19 +38,33 @@ def create():
     h = abs(b-t)/10
     stitches = len(pattern.stitches)
 
-    os.unlink(path)
+    os.unlink(path
 
     # 🔥 AUTO PRICE
     price = int(stitches * 0.05)
 
     # 🔥 Upload image
     img_res = requests.post(
-        "https://connect.squareup.com/v2/catalog/images",
-        headers={"Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"},
-        files={"file": (image.filename, image.stream, image.mimetype)}
-    )
+    "https://connect.squareup.com/v2/catalog/images",
+    headers={
+        "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+    },
+    files={
+        "file": (image.filename, image.stream, image.mimetype),
+        "request": (None, '{"idempotency_key": "' + str(uuid.uuid4()) + '"}', "application/json")
+    }
+)
 
-    img_id = img_res.json().get("image", {}).get("id")
+    img_json = img_res.json()
+
+if "image" not in img_json:
+    return jsonify({
+        "success": False,
+        "error": "Image upload failed",
+        "details": img_json
+    }), 500
+
+img_id = img_json["image"]["id"]
 
     # 🔥 Create product
     body = {
@@ -93,7 +107,18 @@ Auto Price: ${price/100}
         }
     )
 
-    return jsonify(res.json())
+    square_res = res.json()
+
+if "errors" in square_res:
+    return jsonify({
+        "success": False,
+        "error": square_res["errors"]
+    }), 500
+
+return jsonify({
+    "success": True,
+    "product": square_res
+})
 
 @app.route("/")
 def home():
