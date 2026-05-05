@@ -6,9 +6,9 @@ import tempfile, os, requests, uuid
 app = Flask(__name__)
 CORS(app)
 
-# ⚠️ Move these to ENV later
-SQUARE_ACCESS_TOKEN = os.environ.get(EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA)
-SQUARE_LOCATION_ID = os.environ.get(LZTJ86J91SXMN)
+# ✅ Correct ENV usage
+SQUARE_ACCESS_TOKEN = os.environ.get("EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA")
+SQUARE_LOCATION_ID = os.environ.get("LZTJ86J91SXMN")
 
 # 🎯 Hoop size classification
 def classify_area(w, h):
@@ -35,8 +35,9 @@ def bbox(pattern):
 @app.route("/create", methods=["POST"])
 def create():
     try:
+        # ✅ Validate input
         if "file" not in request.files or "image" not in request.files:
-            return jsonify({"success": False, "error": "Missing file/image"}), 400
+            return jsonify({"success": False, "error": "Missing file or image"}), 400
 
         file = request.files["file"]
         image = request.files["image"]
@@ -45,13 +46,17 @@ def create():
         if not category:
             return jsonify({"success": False, "error": "Category required"}), 400
 
+        if not SQUARE_ACCESS_TOKEN:
+            return jsonify({"success": False, "error": "Square token missing"}), 500
+
         design_name = file.filename.rsplit(".", 1)[0]
 
-        # 📂 Save DST temp
+        # 📂 Save DST temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as f:
             file.save(f.name)
             path = f.name
 
+        # 📊 Process embroidery file
         pattern = read(path)
         l, t, r, b = bbox(pattern)
 
@@ -59,19 +64,19 @@ def create():
         height = round(abs(b - t) / 10, 2)
         stitches = len(pattern.stitches)
 
-        os.unlink(path)
+        os.unlink(path)  # ✅ fixed
 
         # 🎯 Hoop size
         area = classify_area(width, height)
 
-        # 💰 Auto price (simple logic)
+        # 💰 Auto price
         price = int(stitches * 0.05)
 
         # 🖼 Upload image to Square
         img_res = requests.post(
             "https://connect.squareup.com/v2/catalog/images",
             headers={
-                "Authorization": f"Bearer {EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA}"
+                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
             },
             files={
                 "file": (image.filename, image.stream, image.mimetype),
@@ -94,16 +99,17 @@ def create():
 
         img_id = img_json["image"]["id"]
 
-        # 📝 CLEAN DESCRIPTION (THIS IS WHAT YOU WANTED)
-        description = f"""Design Name: {design_name}
-Width: {width} mm
-Height: {height} mm
-Stitches: {stitches}
-Hoop Size: {area}
-Format: DST
-"""
+        # 📝 CLEAN STRUCTURED DESCRIPTION (LIKE YOU WANTED)
+        description = (
+            f"Design Name: {design_name}\n"
+            f"Width: {width} mm\n"
+            f"Height: {height} mm\n"
+            f"Stitches: {stitches}\n"
+            f"Hoop Size: {area}\n"
+            f"Format: DST"
+        )
 
-        # 🛒 Create product
+        # 🛒 Create product in Square
         body = {
             "idempotency_key": str(uuid.uuid4()),
             "object": {
@@ -134,7 +140,7 @@ Format: DST
             "https://connect.squareup.com/v2/catalog/object",
             json=body,
             headers={
-                "Authorization": f"Bearer {EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA}",
+                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}",
                 "Content-Type": "application/json"
             }
         )
@@ -147,6 +153,7 @@ Format: DST
                 "error": square_res["errors"]
             }), 500
 
+        # ✅ Success response (for UI)
         return jsonify({
             "success": True,
             "message": "Product created successfully",
