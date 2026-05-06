@@ -4,15 +4,13 @@ from flask import Flask, request, jsonify
 from square.client import Client
 from flask_cors import CORS
 
-# The variable MUST be named 'app'
 app = Flask(__name__)
 CORS(app)
 
-# Use the environment variable you set in Render
-# Provide a fallback string to prevent initialization crash
+# Get token from Render Env
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-# Initialize Client using the recommended Square SDK pattern
+# Initialize Client
 client = Client(
     access_token=SQUARE_TOKEN,
     environment='production'
@@ -20,10 +18,7 @@ client = Client(
 
 @app.route('/', methods=['GET'])
 def health():
-    return jsonify({
-        "status": "online", 
-        "token_set": SQUARE_TOKEN != 'MISSING'
-    }), 200
+    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
