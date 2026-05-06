@@ -1,73 +1,92 @@
 import os
 import uuid
 from flask import Flask, request, jsonify
+# Updated import for the newest Square library version
 from square.client import Client
 from flask_cors import CORS
 
-# The variable MUST be named 'app'
 app = Flask(__name__)
 CORS(app)
 
-# Standard Health Check for Render
-@app.route('/', methods=['GET'])
-def home():
-    return "Service is Live", 200
-
-# Square Client Initialization
+# Use the environment variable you set in Render
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
-client = Client(access_token=SQUARE_TOKEN, environment='production')
+
+# Initialize Client
+client = Client(
+    access_token=SQUARE_TOKEN,
+    environment='production'
+)
+
+@app.route('/', methods=['GET'])
+def health():
+    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
     try:
         result = client.catalog.list_catalog(types='CATEGORY')
         if result.is_success():
-            categories = [{"id": obj['id'], "name": obj['category_data']['name']} 
-                          for obj in result.body.get('objects', [])]
+            # Handle potential empty objects list
+            objs = result.body.get('objects', [])
+            categories = [{"id": o['id'], "name": o['category_data']['name']} for o in objs]
             return jsonify(categories)
-        return jsonify({"error": result.errors}), 400
+        return jsonify({"error": "Square API Error", "details": result.errors}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Server Error", "message": str(e)}), 500
 
 @app.route('/parse', methods=['POST'])
 def parse_file():
     if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
+        return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
+    # Split filename carefully
+    name_parts = file.filename.split('.')
+    name = name_parts[0] if name_parts else "Unknown"
+    
     return jsonify({
-        "name": file.filename.split('.')[0],
-        "description": "Stitches: 10,000\nFormat: .DST",
-        "suggested_price": 10
+        "name": name,
+        "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
+        "suggested_price": 10.00
     })
 
 @app.route('/upload-to-square', methods=['POST'])
-def upload():
+def upload_to_square():
     data = request.json
-    item_body = {
-        "idempotency_key": str(uuid.uuid4()),
-        "object": {
-            "type": "ITEM",
-            "id": "#new_design",
-            "item_data": {
-                "name": data.get('name'),
-                "description": data.get('description'),
-                "category_id": data.get('category_id'),
-                "variations": [{
-                    "type": "ITEM_VARIATION",
-                    "id": "#new_var",
-                    "item_variation_data": {
-                        "name": "Download",
-                        "pricing_type": "FIXED_PRICING",
-                        "price_money": {"amount": int(float(data.get('price', 10)) * 100), "currency": "USD"}
-                    }
-                }]
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
+    try:
+        item_body = {
+            "idempotency_key": str(uuid.uuid4()),
+            "object": {
+                "type": "ITEM",
+                "id": "#new_design",
+                "item_data": {
+                    "name": data.get('name', 'Untitled Design'),
+                    "description": data.get('description', ''),
+                    "category_id": data.get('category_id'),
+                    "variations": [{
+                        "type": "ITEM_VARIATION",
+                        "id": "#new_var",
+                        "item_variation_data": {
+                            "name": "Digital Download",
+                            "pricing_type": "FIXED_PRICING",
+                            "price_money": {
+                                "amount": int(float(data.get('price', 10)) * 100),
+                                "currency": "USD"
+                            }
+                        }
+                    }]
+                }
             }
         }
-    }
-    result = client.catalog.upsert_catalog_object(item_body)
-    return jsonify(result.body if result.is_success() else result.errors)
+        result = client.catalog.upsert_catalog_object(item_body)
+        if result.is_success():
+            return jsonify({"status": "Success", "item": result.body})
+        return jsonify({"status": "Error", "message": result.errors}), 400
+    except Exception as e:
+        return jsonify({"error": "Upload Failed", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    # Render requires binding to 0.0.0.0 and port 10000
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
