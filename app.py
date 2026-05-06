@@ -4,14 +4,12 @@ from flask import Flask, request, jsonify
 from square.client import Client
 from flask_cors import CORS
 
-# This variable MUST be named exactly 'app'
 app = Flask(__name__)
 CORS(app)
 
-# Fetch token from Environment Variables
+# Square Token from Render Settings
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-# Initialize Square Client
 client = Client(
     access_token=SQUARE_TOKEN,
     environment='production'
@@ -39,7 +37,7 @@ def parse_file():
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
     return jsonify({
-        "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
+        "name": file.filename.split('.') if '.' in file.filename else file.filename,
         "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
         "suggested_price": 10.00
     })
@@ -82,7 +80,9 @@ def upload_to_square():
     except Exception as e:
         return jsonify({"error": "Upload Failed", "message": str(e)}), 500
 
+# MANDATORY RENDER FIX
 if __name__ == '__main__':
-    # Render requires binding to 0.0.0.0 and port 10000
+    # Render assigns a port dynamically. Default is 10000.
     port = int(os.environ.get("PORT", 10000))
+    # Must use 0.0.0.0 to be accessible externally
     app.run(host='0.0.0.0', port=port)
