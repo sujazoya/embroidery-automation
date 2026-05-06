@@ -66,17 +66,21 @@ def create():
 
         # 🖼 FIXED IMAGE UPLOAD
         img_res = requests.post(
-            "https://connect.squareup.com/v2/catalog/images",
-            headers={
-                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
-            },
-            files={
-                "file": (image.filename, image.stream, image.mimetype)
-            },
-            data={
+    "https://connect.squareup.com/v2/catalog/images",
+    headers={
+        "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+    },
+    files={
+        "file": (image.filename, image.stream, image.mimetype),
+        "request": (
+            None,
+            json.dumps({
                 "idempotency_key": str(uuid.uuid4())
-            }
+            }),
+            "application/json"
         )
+    }
+)
 
         print("📸 STATUS:", img_res.status_code)
         print("📸 RESPONSE:", img_res.text)
