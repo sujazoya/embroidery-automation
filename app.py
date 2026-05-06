@@ -6,10 +6,9 @@ import tempfile, os, requests, uuid, json
 app = Flask(__name__)
 CORS(app)
 
-# ✅ USE ENV (or fallback to hardcoded)
-SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN") or "EAAAl4nOZHrwp_oBdosTVg0l4PX9fl_u8vD70r64pG47JdvAutDQYL_dW8mi7CiA"
-SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID") or "LZTJ86J91SXMN"
-
+# ✅ CORRECT ENV VARIABLES (SET THESE IN RENDER DASHBOARD)
+SQUARE_ACCESS_TOKEN = os.environ.get("SQUARE_ACCESS_TOKEN")
+SQUARE_LOCATION_ID = os.environ.get("SQUARE_LOCATION_ID")
 
 # 🎯 Hoop size classification
 def classify_area(w, h):
@@ -27,20 +26,20 @@ def classify_area(w, h):
         return "12x20"
     return "Oversized"
 
-
 # 📦 Bounding box
 def bbox(pattern):
     xs = [p[0] for p in pattern.stitches]
     ys = [p[1] for p in pattern.stitches]
     return min(xs), min(ys), max(xs), max(ys)
 
-
 @app.route("/create", methods=["POST"])
 def create():
     try:
-        print("==== REQUEST RECEIVED ====")
-        print("FILES:", request.files)
-        print("FORM:", request.form)
+        print("🔥 Request received")
+
+        # ✅ Check ENV
+        if not SQUARE_ACCESS_TOKEN:
+            return jsonify({"success": False, "error": "Square token missing"}), 500
 
         # ✅ Validate input
         if "file" not in request.files or "image" not in request.files:
@@ -53,17 +52,13 @@ def create():
         if not category:
             return jsonify({"success": False, "error": "Category required"}), 400
 
-        if not SQUARE_ACCESS_TOKEN:
-            return jsonify({"success": False, "error": "Square token missing"}), 500
-
         design_name = file.filename.rsplit(".", 1)[0]
 
-        # 📂 Save DST temporarily
+        # 📂 Save DST
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dst") as f:
             file.save(f.name)
             path = f.name
 
-        # 📊 Process embroidery file
         pattern = read(path)
         l, t, r, b = bbox(pattern)
 
@@ -73,73 +68,47 @@ def create():
 
         os.unlink(path)
 
-        # 🎯 Hoop size
         area = classify_area(width, height)
 
         # 💰 Auto price
         price = int(stitches * 0.05)
 
         # =========================
-        # 🖼 UPLOAD IMAGE TO SQUARE
+        # 🔥 FIXED IMAGE UPLOAD
         # =========================
-        print("==== START IMAGE UPLOAD ====")
+        image_bytes = image.read()
 
-if not image:
-    print("❌ NO IMAGE RECEIVED")
-else:
-    print("✅ IMAGE RECEIVED:", image.filename, image.mimetype)
+        img_res = requests.post(
+            "https://connect.squareup.com/v2/catalog/images",
+            headers={
+                "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
+            },
+            files={
+                "file": (image.filename, image_bytes, image.mimetype),
+                "request": (
+                    None,
+                    json.dumps({
+                        "idempotency_key": str(uuid.uuid4())
+                    }),
+                    "application/json"
+                )
+            }
+        )
 
-try:
-    img_res = requests.post(
-        "https://connect.squareup.com/v2/catalog/images",
-        headers={
-            "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
-        },
-        files={
-            "file": (image.filename, image.stream, image.mimetype)
-        },
-        data={
-            "request": json.dumps({
-                "idempotency_key": str(uuid.uuid4())
-            })
-        }
-    )
+        print("📸 Image upload response:", img_res.text)
 
-    print("STATUS:", img_res.status_code)
-    print("RAW RESPONSE:", img_res.text)
-
-    # Try parsing JSON safely
-    try:
         img_json = img_res.json()
-    except:
-        return jsonify({
-            "success": False,
-            "error": "Invalid JSON from Square",
-            "raw": img_res.text
-        }), 500
 
-    if "image" not in img_json:
-        return jsonify({
-            "success": False,
-            "error": "Image upload failed",
-            "details": img_json
-        }), 500
+        if "image" not in img_json:
+            return jsonify({
+                "success": False,
+                "error": "Image upload failed",
+                "details": img_json
+            }), 500
 
-    img_id = img_json["image"]["id"]
+        img_id = img_json["image"]["id"]
 
-except Exception as e:
-    print("❌ EXCEPTION DURING IMAGE UPLOAD:", str(e))
-    return jsonify({
-        "success": False,
-        "error": "Crash during image upload",
-        "details": str(e)
-    }), 500
-
-print("==== END IMAGE UPLOAD ====")
-
-        # =========================
-        # 📝 CLEAN DESCRIPTION
-        # =========================
+        # 📝 Description
         description = (
             f"Design Name: {design_name}\n"
             f"Width: {width} mm\n"
@@ -187,10 +156,7 @@ print("==== END IMAGE UPLOAD ====")
             }
         )
 
-        print("==== SQUARE PRODUCT DEBUG ====")
-        print("STATUS:", res.status_code)
-        print("RESPONSE:", res.text)
-        print("==============================")
+        print("🛒 Product response:", res.text)
 
         square_res = res.json()
 
@@ -214,6 +180,7 @@ print("==== END IMAGE UPLOAD ====")
         })
 
     except Exception as e:
+        print("❌ ERROR:", str(e))
         return jsonify({
             "success": False,
             "error": str(e)
@@ -224,7 +191,7 @@ print("==== END IMAGE UPLOAD ====")
 def home():
     return {
         "status": "running",
-        "message": "Embroidery Auto Product API 🚀"
+        "message": "Embroidery API working 🚀"
     }
 
 
