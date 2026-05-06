@@ -1,8 +1,8 @@
 import os
 import uuid
 from flask import Flask, request, jsonify
-# Updated import for the newest Square SDK version
-import square.client 
+# Standard import for the newest Square SDK
+from square.client import Client
 from flask_cors import CORS
 
 # The variable MUST be named exactly 'app' for Gunicorn
@@ -12,10 +12,11 @@ CORS(app)
 # Use the environment variable you set in Render
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-# Initialize Client using the new direct-access method
-client = square.client.Client(
+# CORRECT INITIALIZATION FOR VERSION 44+
+# The library now handles 'Client' directly from the main import
+client = Client(
     access_token=SQUARE_TOKEN,
-    environment='production' 
+    environment='production'
 )
 
 @app.route('/', methods=['GET'])
@@ -64,7 +65,10 @@ def upload_to_square():
                         "item_variation_data": {
                             "name": "Download",
                             "pricing_type": "FIXED_PRICING",
-                            "price_money": {"amount": int(float(data.get('price', 10)) * 100), "currency": "USD"}
+                            "price_money": {
+                                "amount": int(float(data.get('price', 10)) * 100),
+                                "currency": "USD"
+                            }
                         }
                     }]
                 }
@@ -77,7 +81,6 @@ def upload_to_square():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# MANDATORY RENDER BINDING
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
