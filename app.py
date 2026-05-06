@@ -35,13 +35,6 @@ def bbox(pattern):
 @app.route("/create", methods=["POST"])
 def create():
     try:
-        print("🔥 Request received")
-
-        # ✅ Check ENV
-        if not SQUARE_ACCESS_TOKEN:
-            return jsonify({"success": False, "error": "Square token missing"}), 500
-
-        # ✅ Validate input
         if "file" not in request.files or "image" not in request.files:
             return jsonify({"success": False, "error": "Missing file or image"}), 400
 
@@ -69,34 +62,24 @@ def create():
         os.unlink(path)
 
         area = classify_area(width, height)
-
-        # 💰 Auto price
         price = int(stitches * 0.05)
 
-        # =========================
-        # 🔥 FIXED IMAGE UPLOAD
-        # =========================
-        image_bytes = image.read()
-
+        # 🖼 FIXED IMAGE UPLOAD
         img_res = requests.post(
             "https://connect.squareup.com/v2/catalog/images",
             headers={
                 "Authorization": f"Bearer {SQUARE_ACCESS_TOKEN}"
             },
             files={
-                "file": (image.filename, image_bytes, image.mimetype),
-                "request": (
-                    None,
-                    json.dumps({
-                        "idempotency_key": str(uuid.uuid4())
-                    }),
-                    "application/json"
-                )
+                "file": (image.filename, image.stream, image.mimetype)
+            },
+            data={
+                "idempotency_key": str(uuid.uuid4())
             }
         )
 
-        pprint("📸 STATUS:", img_res.status_code)
-print("📸 RESPONSE:", img_res.text)
+        print("📸 STATUS:", img_res.status_code)
+        print("📸 RESPONSE:", img_res.text)
 
         img_json = img_res.json()
 
@@ -104,12 +87,12 @@ print("📸 RESPONSE:", img_res.text)
             return jsonify({
                 "success": False,
                 "error": "Image upload failed",
-                "details": img_json
+                "square_response": img_json
             }), 500
 
         img_id = img_json["image"]["id"]
 
-        # 📝 Description
+        # 📝 DESCRIPTION
         description = (
             f"Design Name: {design_name}\n"
             f"Width: {width} mm\n"
@@ -119,9 +102,7 @@ print("📸 RESPONSE:", img_res.text)
             f"Format: DST"
         )
 
-        # =========================
         # 🛒 CREATE PRODUCT
-        # =========================
         body = {
             "idempotency_key": str(uuid.uuid4()),
             "object": {
@@ -157,7 +138,8 @@ print("📸 RESPONSE:", img_res.text)
             }
         )
 
-        print("🛒 Product response:", res.text)
+        print("🛒 PRODUCT STATUS:", res.status_code)
+        print("🛒 PRODUCT RESPONSE:", res.text)
 
         square_res = res.json()
 
@@ -181,7 +163,7 @@ print("📸 RESPONSE:", img_res.text)
         })
 
     except Exception as e:
-        print("❌ ERROR:", str(e))
+        print("🔥 ERROR:", str(e))
         return jsonify({
             "success": False,
             "error": str(e)
@@ -190,10 +172,7 @@ print("📸 RESPONSE:", img_res.text)
 
 @app.route("/")
 def home():
-    return {
-        "status": "running",
-        "message": "Embroidery API working 🚀"
-    }
+    return {"status": "running"}
 
 
 if __name__ == "__main__":
