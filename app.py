@@ -4,14 +4,14 @@ from flask import Flask, request, jsonify
 from square.client import Client
 from flask_cors import CORS
 
-# The variable MUST be named 'app'
+# This variable MUST be named exactly 'app'
 app = Flask(__name__)
 CORS(app)
 
-# Use the environment variable you set in Render
+# Fetch token from Environment Variables
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-# Initialize Client
+# Initialize Square Client
 client = Client(
     access_token=SQUARE_TOKEN,
     environment='production'
@@ -83,5 +83,6 @@ def upload_to_square():
         return jsonify({"error": "Upload Failed", "message": str(e)}), 500
 
 if __name__ == '__main__':
+    # Render requires binding to 0.0.0.0 and port 10000
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
