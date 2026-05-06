@@ -1,17 +1,18 @@
 import os
 import uuid
 from flask import Flask, request, jsonify
-# Updated import for the newest Square library version
 from square.client import Client
 from flask_cors import CORS
 
+# The variable MUST be named 'app'
 app = Flask(__name__)
 CORS(app)
 
 # Use the environment variable you set in Render
+# Provide a fallback string to prevent initialization crash
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-# Initialize Client
+# Initialize Client using the recommended Square SDK pattern
 client = Client(
     access_token=SQUARE_TOKEN,
     environment='production'
@@ -19,14 +20,16 @@ client = Client(
 
 @app.route('/', methods=['GET'])
 def health():
-    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
+    return jsonify({
+        "status": "online", 
+        "token_set": SQUARE_TOKEN != 'MISSING'
+    }), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
     try:
         result = client.catalog.list_catalog(types='CATEGORY')
         if result.is_success():
-            # Handle potential empty objects list
             objs = result.body.get('objects', [])
             categories = [{"id": o['id'], "name": o['category_data']['name']} for o in objs]
             return jsonify(categories)
@@ -39,12 +42,8 @@ def parse_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
-    # Split filename carefully
-    name_parts = file.filename.split('.')
-    name = name_parts[0] if name_parts else "Unknown"
-    
     return jsonify({
-        "name": name,
+        "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
         "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
         "suggested_price": 10.00
     })
