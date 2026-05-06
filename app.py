@@ -4,10 +4,11 @@ from flask import Flask, request, jsonify
 from square.client import Client
 from flask_cors import CORS
 
+# The variable MUST be named 'app'
 app = Flask(__name__)
 CORS(app)
 
-# Get token from Render Env
+# Use the environment variable you set in Render
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
 # Initialize Client
