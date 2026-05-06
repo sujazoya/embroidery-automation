@@ -1,23 +1,26 @@
 import os
 import uuid
 from flask import Flask, request, jsonify
-from square.client import Client
+# Updated import for the newest Square SDK version
+import square.client 
 from flask_cors import CORS
 
+# The variable MUST be named exactly 'app' for Gunicorn
 app = Flask(__name__)
 CORS(app)
 
-# Fetch token from Render Environment Variables
+# Use the environment variable you set in Render
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-client = Client(
+# Initialize Client using the new direct-access method
+client = square.client.Client(
     access_token=SQUARE_TOKEN,
-    environment='production'
+    environment='production' 
 )
 
 @app.route('/', methods=['GET'])
 def health():
-    return "Service is Online", 200
+    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
@@ -37,8 +40,8 @@ def parse_file():
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
     return jsonify({
-        "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
-        "description": "Stitches: 10,000\nFormat: .DST",
+        "name": file.filename.split('.') if '.' in file.filename else file.filename,
+        "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
         "suggested_price": 10.00
     })
 
