@@ -95,7 +95,8 @@ def create():
             }
         )
 
-        print("📸 Image upload response:", img_res.text)
+        pprint("📸 STATUS:", img_res.status_code)
+print("📸 RESPONSE:", img_res.text)
 
         img_json = img_res.json()
 
