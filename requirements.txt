@@ -1,6 +1,4 @@
 flask
 flask-cors
-pyembroidery
-requests
 squareup==44.0.1.20260122
 gunicorn
