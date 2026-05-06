@@ -4,22 +4,26 @@ from flask import Flask, request, jsonify
 from square.client import Client
 from flask_cors import CORS
 
-# Initialize Flask
+# Initialize Flask - The variable MUST be named 'app' for Gunicorn
 app = Flask(__name__)
 CORS(app)
 
-# Setup Square Client with error handling
-# This prevents the app from crashing during boot if the token is missing
-SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING_TOKEN')
+# Fetch token from Render Environment Variables
+SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN')
 
+# Initialize Square Client
+# This setup prevents a crash even if the token is temporarily missing
 client = Client(
-    access_token=SQUARE_TOKEN,
+    access_token=SQUARE_TOKEN if SQUARE_TOKEN else "MISSING",
     environment='production' 
 )
 
 @app.route('/', methods=['GET'])
 def health():
-    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING_TOKEN'}), 200
+    return jsonify({
+        "status": "online",
+        "token_detected": bool(SQUARE_TOKEN)
+    }), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
@@ -31,16 +35,16 @@ def get_categories():
             return jsonify(categories)
         return jsonify({"error": "Square API Error", "details": result.errors}), 400
     except Exception as e:
-        return jsonify({"error": "Server Error", "message": str(e)}), 500
+        return jsonify({"error": "Server Exception", "message": str(e)}), 500
 
 @app.route('/parse', methods=['POST'])
 def parse_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
-    # Simplified parser logic
+    # Placeholder for your specific DST parser logic
     parsed_data = {
-        "name": file.filename.split('.')[0],
+        "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
         "description": "Parsed Embroidery Design\nFormat: .DST",
         "suggested_price": 10.00
     }
@@ -49,6 +53,9 @@ def parse_file():
 @app.route('/upload-to-square', methods=['POST'])
 def upload_to_square():
     data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
     try:
         item_body = {
             "idempotency_key": str(uuid.uuid4()),
@@ -81,7 +88,7 @@ def upload_to_square():
     except Exception as e:
         return jsonify({"error": "Upload Failed", "message": str(e)}), 500
 
+# Required for Render to bind to the correct port
 if __name__ == '__main__':
-    # Standard local run logic
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
