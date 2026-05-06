@@ -7,7 +7,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# Square Token from Render Settings
+# Fetch token from Render Environment Variables
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
 client = Client(
@@ -17,7 +17,7 @@ client = Client(
 
 @app.route('/', methods=['GET'])
 def health():
-    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
+    return "Service is Online", 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
@@ -27,7 +27,7 @@ def get_categories():
             objs = result.body.get('objects', [])
             categories = [{"id": o['id'], "name": o['category_data']['name']} for o in objs]
             return jsonify(categories)
-        return jsonify({"error": "Square API Error", "details": result.errors}), 400
+        return jsonify({"error": "Square API Error", "details": str(result.errors)}), 400
     except Exception as e:
         return jsonify({"error": "Server Error", "message": str(e)}), 500
 
@@ -37,17 +37,14 @@ def parse_file():
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files['file']
     return jsonify({
-        "name": file.filename.split('.') if '.' in file.filename else file.filename,
-        "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
+        "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
+        "description": "Stitches: 10,000\nFormat: .DST",
         "suggested_price": 10.00
     })
 
 @app.route('/upload-to-square', methods=['POST'])
 def upload_to_square():
     data = request.json
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-        
     try:
         item_body = {
             "idempotency_key": str(uuid.uuid4()),
@@ -55,19 +52,16 @@ def upload_to_square():
                 "type": "ITEM",
                 "id": "#new_design",
                 "item_data": {
-                    "name": data.get('name', 'Untitled Design'),
+                    "name": data.get('name', 'Untitled'),
                     "description": data.get('description', ''),
                     "category_id": data.get('category_id'),
                     "variations": [{
                         "type": "ITEM_VARIATION",
                         "id": "#new_var",
                         "item_variation_data": {
-                            "name": "Digital Download",
+                            "name": "Download",
                             "pricing_type": "FIXED_PRICING",
-                            "price_money": {
-                                "amount": int(float(data.get('price', 10)) * 100),
-                                "currency": "USD"
-                            }
+                            "price_money": {"amount": int(float(data.get('price', 10)) * 100), "currency": "USD"}
                         }
                     }]
                 }
@@ -75,14 +69,12 @@ def upload_to_square():
         }
         result = client.catalog.upsert_catalog_object(item_body)
         if result.is_success():
-            return jsonify({"status": "Success", "item": result.body})
-        return jsonify({"status": "Error", "message": result.errors}), 400
+             return jsonify(result.body)
+        return jsonify({"error": str(result.errors)}), 400
     except Exception as e:
-        return jsonify({"error": "Upload Failed", "message": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-# MANDATORY RENDER FIX
+# MANDATORY RENDER BINDING
 if __name__ == '__main__':
-    # Render assigns a port dynamically. Default is 10000.
     port = int(os.environ.get("PORT", 10000))
-    # Must use 0.0.0.0 to be accessible externally
     app.run(host='0.0.0.0', port=port)
