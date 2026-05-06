@@ -1,23 +1,25 @@
 import os
 import uuid
 from flask import Flask, request, jsonify
-from square.client import Client
+# New import format required by the latest Square SDK
+import square.client 
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
-# Fetch token from Render Environment Variables
+# Setup Square Client
 SQUARE_TOKEN = os.environ.get('SQUARE_ACCESS_TOKEN', 'MISSING')
 
-client = Client(
+# The new version often requires accessing Client directly from square.client
+client = square.client.Client(
     access_token=SQUARE_TOKEN,
     environment='production'
 )
 
 @app.route('/', methods=['GET'])
 def health():
-    return "Service is Online", 200
+    return jsonify({"status": "online", "token_set": SQUARE_TOKEN != 'MISSING'}), 200
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
@@ -38,7 +40,7 @@ def parse_file():
     file = request.files['file']
     return jsonify({
         "name": file.filename.split('.')[0] if '.' in file.filename else file.filename,
-        "description": "Stitches: 10,000\nFormat: .DST",
+        "description": "Parsed Embroidery Design\nFormat: .DST\nStitches: 10,000",
         "suggested_price": 10.00
     })
 
@@ -69,12 +71,14 @@ def upload_to_square():
         }
         result = client.catalog.upsert_catalog_object(item_body)
         if result.is_success():
-             return jsonify(result.body)
+            return jsonify(result.body)
         return jsonify({"error": str(result.errors)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # MANDATORY RENDER BINDING
 if __name__ == '__main__':
+    # Pulls the port from Render (defaults to 10000)
     port = int(os.environ.get("PORT", 10000))
+    # Must bind to 0.0.0.0 to be public
     app.run(host='0.0.0.0', port=port)
